@@ -1,0 +1,9 @@
+audio:
+  sr: 16000
+  max_sec: 4.0
+  n_fft: 1024
+  hop: 256
+  n_mels: 80
+
+data:
+  root: data/LA
