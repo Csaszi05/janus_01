@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JanusCNN szimuláció</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: egyetlen hosszú, olvasható oszlop (max 960px), minden szakasz egy réteg; a számok monospace-ben. */
+:root{
+  --bg:#f2f4f6; --surface:#ffffff; --fg:#16212b; --muted:#5d6b78; --line:#d5dde4;
+  --accent:#0f6f8c; --accent-soft:#d6ebf1; --spoof:#b5452f; --bona:#267a5f; --warn:#8a6d1f;
+  --font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141a; --surface:#161d25; --fg:#e4ebf1; --muted:#97a5b2; --line:#2a3542;
+  --accent:#4fb6d4; --accent-soft:#18323c; --spoof:#ec7a62; --bona:#4fc49e; --warn:#d9b34c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141a; --surface:#161d25; --fg:#e4ebf1; --muted:#97a5b2; --line:#2a3542;
+  --accent:#4fb6d4; --accent-soft:#18323c; --spoof:#ec7a62; --bona:#4fc49e; --warn:#d9b34c; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+main{max-width:960px;margin:0 auto}
+h1{font-size:1.9rem;font-weight:600;letter-spacing:-.01em;margin:28px 0 6px;text-wrap:balance}
+h2{font-size:1.25rem;font-weight:600;margin:0 0 4px;text-wrap:balance}
+h3{font-size:1rem;font-weight:600;margin:14px 0 6px}
+p{margin:6px 0;max-width:68ch}
+.lead{color:var(--muted);font-size:1.02rem;max-width:72ch}
+.eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:2px}
+section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:18px 0}
+.controls{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:10px 14px;margin:16px 0;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.ctl{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ctl label{color:var(--muted);font-size:.85rem}
+button,select,input[type=number]{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--fg)}
+button.bona.on{border-color:var(--bona)} button.spoof.on{border-color:var(--spoof)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.note{border-left:3px solid var(--warn);padding:4px 10px;margin:10px 0;color:var(--muted);font-size:.92rem}
+.heat{display:block;width:100%;max-width:100%;image-rendering:pixelated;border-radius:4px;background:#000}
+.axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.72rem;color:var(--muted);margin-top:3px}
+.row{display:flex;flex-wrap:wrap;gap:16px}
+.row>*{min-width:0;flex:1 1 260px}
+.shape{font-family:var(--mono);font-size:.82rem;color:var(--muted)}
+.shape b{color:var(--fg);font-weight:500}
+/* rácsok a lépésenkénti demóhoz */
+.grid{display:grid;gap:3px;font-family:var(--mono);font-size:.8rem}
+.cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:4px;background:var(--bg);border:1px solid var(--line);min-width:0}
+.cell.pad{color:var(--muted);border-style:dashed;opacity:.6}
+.cell.win{background:var(--accent-soft);border-color:var(--accent)}
+.cell.cur{background:var(--accent);color:#fff;border-color:var(--accent)}
+.cell.done{background:var(--surface)}
+.cell.neg{color:var(--spoof)} .cell.pos{color:var(--accent)}
+.kgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;max-width:150px}
+.kgrid input{width:100%;padding:4px 2px;text-align:center;font-family:var(--mono);font-size:.8rem}
+.calc{font-family:var(--mono);font-size:.82rem;background:var(--bg);border-radius:6px;padding:8px 10px;overflow-x:auto;white-space:nowrap}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
+.tile{padding:0;border:2px solid transparent;border-radius:6px;background:transparent;cursor:pointer}
+.tile.sel{border-color:var(--accent)}
+.tile canvas{display:block;width:100%;image-rendering:pixelated;border-radius:4px}
+.tile span{display:block;font-family:var(--mono);font-size:.68rem;color:var(--muted);text-align:center;margin-top:2px}
+.stages{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:10px}
+.stage h4{margin:0 0 4px;font-size:.85rem;font-weight:500}
+.bars{display:flex;align-items:flex-end;gap:2px;height:90px;border-bottom:1px solid var(--line)}
+.bars div{flex:1;min-width:2px;border-radius:2px 2px 0 0}
+.bars.center{align-items:center;border-bottom:0;position:relative}
+.bars.center::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:1px solid var(--line)}
+.bars.center div{position:relative;border-radius:2px}
+.big{font-family:var(--mono);font-size:1.6rem;font-weight:500}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;font-weight:500;font-size:.9rem}
+.pill.spoof{background:var(--spoof);color:#fff} .pill.bona{background:var(--bona);color:#fff}
+.gauge{height:14px;border-radius:7px;background:linear-gradient(90deg,var(--bona),var(--spoof));position:relative;margin:10px 0}
+.gauge i{position:absolute;top:-4px;width:4px;height:22px;background:var(--fg);border-radius:2px;transform:translateX(-50%)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tablewrap{overflow-x:auto}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+.flow b{background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:3px 7px;font-weight:500;color:var(--fg)}
+.relu-demo{display:flex;flex-wrap:wrap;gap:4px;font-family:var(--mono);font-size:.82rem}
+.relu-demo span{padding:3px 7px;border-radius:4px;background:var(--bg);border:1px solid var(--line)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<main>
+<div class="eyebrow">janus_01 · src/model.py</div>
+<h1>JanusCNN szimuláció</h1>
+<p class="lead">A modell pontos mása fut itt a böngészőben: ugyanazok a rétegek, ugyanazok a méretek, valódi számolással. A súlyok véletlenek, ahogy a tanítás kezdetén is azok. Ezért a végső válasz még értelmetlen: a tanítás pontosan ezeket a számokat állítja be úgy, hogy a válasz jó legyen.</p>
+
+<div class="controls">
+  <div class="ctl"><label>Bemenet</label>
+    <button id="btnBona" class="bona on">bonafide példa</button>
+    <button id="btnSpoof" class="spoof">spoof példa</button></div>
+  <div class="ctl"><label>Súlyok</label><button id="btnSeed">Új véletlen súlyok</button></div>
+  <div class="ctl"><label>Mód</label>
+    <button id="btnTrain" class="on">tanítás (dropout be)</button>
+    <button id="btnEval">következtetés</button></div>
+</div>
+
+<section id="s-input">
+  <div class="eyebrow">0. lépés</div>
+  <h2>Bemenet: a mel-spektrogram</h2>
+  <p>A hangból a <span class="mono">features.py</span> egy számtáblázatot készít. 80 sor (frekvenciasávok, alul a mély, felül a magas hangok), 251 oszlop (idő, 16 ms oszloponként, összesen 4 másodperc). Minden pixel egy szám: hangerő decibelben, −80 és 0 között. A modell nem tudja, hogy ez hang. Egy számokból álló képet lát.</p>
+  <canvas id="cInput" class="heat" width="251" height="80"></canvas>
+  <div class="axis"><span>0 s</span><span>1 s</span><span>2 s</span><span>3 s</span><span>4 s</span></div>
+  <div class="shape" style="margin-top:6px">alak: <b>(1, 1, 80, 251)</b> = köteg 1 · csatorna 1 · 80 sáv · 251 időlépés</div>
+  <div class="note">A példák szintetikusak, nem valódi ASVspoof fájlok. A spoof példába szándékosan durva nyomokat tettünk (hiányzó magas sáv, tökéletesen egyenes alaphang, zümmögő vonalak), hogy látszódjanak. A valódi spoof nyomok ennél sokkal finomabbak, ezért kell tanulni őket.</div>
+</section>
+
+<section id="s-conv">
+  <div class="eyebrow">Alapművelet</div>
+  <h2>Konvolúció lépésről lépésre</h2>
+  <p>A konvolúció egy 3×3-as szűrőt (kernelt) csúsztat végig a képen. Minden helyen a 9 képpontot összeszorozza a szűrő 9 számával, összeadja, és az eredmény a kimeneti kép egy pixele lesz. A szürke szaggatott keret a padding: nullákkal vesszük körbe a képet, hogy a kimenet ugyanakkora maradjon.</p>
+  <div class="row">
+    <div>
+      <h3>Bemenet 6×6 + padding</h3>
+      <div class="grid" id="stepIn" style="grid-template-columns:repeat(8,1fr);max-width:300px"></div>
+      <p class="muted" style="font-size:.85rem">A spektrogram egy darabja, 0–9 skálára kerekítve.</p>
+    </div>
+    <div style="flex:0 1 190px">
+      <h3>Szűrő 3×3</h3>
+      <select id="stepKernel"></select>
+      <div class="kgrid" id="stepK" style="margin-top:8px"></div>
+    </div>
+    <div>
+      <h3>Kimenet 6×6</h3>
+      <div class="grid" id="stepOut" style="grid-template-columns:repeat(6,1fr);max-width:225px"></div>
+    </div>
+  </div>
+  <div class="calc" id="stepCalc" style="margin-top:12px">Nyomj a Lépés gombra.</div>
+  <div class="ctl" style="margin-top:10px">
+    <button id="stepNext">Lépés</button>
+    <button id="stepPlay">Lejátszás</button>
+    <button id="stepReset">Újra</button>
+    <span class="muted mono" id="stepPos" style="font-size:.82rem"></span>
+  </div>
+  <p style="margin-top:12px">A modell első rétege pontosan ezt csinálja, csak 16 különböző szűrővel egyszerre, a teljes 80×251-es képen. A 16 szűrő 16 kimeneti képet ad: ezek a csatornák. A szűrők számait a tanítás állítja be.</p>
+</section>
+
+<section id="s-filter">
+  <div class="eyebrow">Mit lát egy szűrő?</div>
+  <h2>Kézzel választott szűrők a teljes spektrogramon</h2>
+  <p>Itt egy szűrőt választhatsz vagy szerkeszthetsz, és látod, mit emel ki a bemenetből. Egy tanított modell szűrői ilyesmik, csak nem kézzel, hanem a hibából visszafelé tanulva állnak be.</p>
+  <div class="row">
+    <div style="flex:0 1 220px">
+      <select id="filtKernel"></select>
+      <div class="kgrid" id="filtK" style="margin-top:8px"></div>
+      <label style="display:block;margin-top:10px;font-size:.9rem"><input type="checkbox" id="filtRelu"> ReLU utána (negatívok nullázva)</label>
+    </div>
+    <div style="flex:3 1 400px">
+      <canvas id="cFilt" class="heat" width="251" height="80"></canvas>
+      <p class="muted" id="filtLegend" style="font-size:.85rem"></p>
+    </div>
+  </div>
+</section>
+
+<section id="s-ops">
+  <div class="eyebrow">A blokk másik három lépése</div>
+  <h2>BatchNorm, ReLU, MaxPool</h2>
+  <div class="row">
+    <div>
+      <h3>BatchNorm</h3>
+      <p>Csatornánként kivonja az átlagot és eloszt a szórással, így minden csatorna 0 körüli, 1 szórású számokat ad tovább. Ettől a tanulás stabil és gyors. Az 1. blokk 0. csatornáján most:</p>
+      <div class="calc" id="bnCalc"></div>
+      <p class="muted" style="font-size:.85rem">Tanításkor a köteg (64 minta) statisztikáját használja, itt egyetlen minta van. A tanult γ és β skálázás itt 1 és 0.</p>
+    </div>
+    <div>
+      <h3>ReLU</h3>
+      <p>A legegyszerűbb lépés: ami negatív, nulla lesz. A pozitív marad. Enélkül a három konvolúció összeolvadna egyetlen lineáris szűrővé.</p>
+      <div class="relu-demo" id="reluIn"></div>
+      <div class="muted" style="font-size:.8rem;margin:4px 0">↓ ReLU</div>
+      <div class="relu-demo" id="reluOut"></div>
+    </div>
+    <div>
+      <h3>MaxPool 2×2</h3>
+      <p>Minden 2×2-es négyzetből a legnagyobb marad. A kép mindkét irányban feleződik, a következő blokk így nagyobb léptékű mintákat lát.</p>
+      <div class="row" style="gap:10px;align-items:center">
+        <div class="grid" id="poolIn" style="grid-template-columns:repeat(4,1fr);max-width:150px;flex:0 1 150px"></div>
+        <div class="muted mono" style="flex:0 0 auto">→</div>
+        <div class="grid" id="poolOut" style="grid-template-columns:repeat(2,1fr);max-width:76px;flex:0 1 76px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s-blocks">
+  <div class="eyebrow">1–3. lépés</div>
+  <h2>A három blokk egymás után</h2>
+  <p>Minden blokk: konvolúció → BatchNorm → ReLU → MaxPool. A csatornák száma nő (1 → 16 → 32 → 64), a kép mérete feleződik. Kattints egy csatornára, hogy lásd a négy lépést rajta. A csempék a blokk végső kimenetei, csatornánként.</p>
+  <div id="blocks"></div>
+</section>
+
+<section id="s-head">
+  <div class="eyebrow">4. lépés</div>
+  <h2>A fej: 64 képből egy szám</h2>
+  <p>A harmadik blokk után 64 csatorna van, mindegyik egy 10×31-es kép. Az <span class="mono">AdaptiveAvgPool2d(1)</span> minden csatornát a saját átlagára cserél. Marad 64 szám. Ez a felvétel tömör leírása a modell szemében.</p>
+  <h3>64 csatornaátlag</h3>
+  <div class="bars" id="avgBars"></div>
+  <h3>Dropout(0.3) <span class="muted" style="font-weight:400;font-size:.85rem" id="dropNote"></span></h3>
+  <div class="bars" id="dropBars"></div>
+  <h3>Linear(64 → 1): súlyozott összeg</h3>
+  <p>A 64 számot a modell 64 tanult súllyal szorozza, összeadja, és hozzáad egy eltolást (bias). Az eredmény a logit.</p>
+  <div class="row">
+    <div><div class="muted" style="font-size:.82rem">a 64 súly (w)</div><div class="bars center" id="wBars"></div></div>
+    <div><div class="muted" style="font-size:.82rem">szorzatok (x · w)</div><div class="bars center" id="prodBars"></div></div>
+  </div>
+  <div class="calc" id="linCalc" style="margin-top:10px"></div>
+  <h3>Logit → valószínűség → döntés</h3>
+  <div class="row">
+    <div>
+      <div class="muted" style="font-size:.82rem">logit</div><div class="big" id="logitVal"></div>
+      <p class="muted" style="font-size:.85rem">Pozitív = inkább spoof, negatív = inkább bonafide. A modellből ez jön ki, a tanítás ezzel dolgozik.</p>
+    </div>
+    <div>
+      <div class="muted" style="font-size:.82rem">sigmoid(logit) = P(spoof)</div><div class="big" id="probVal"></div>
+      <div class="gauge"><i id="gaugePin"></i></div>
+      <div>döntés: <span class="pill" id="decision"></span> <span class="muted" style="font-size:.85rem">(küszöb 0,5; éles rendszerben az EER-küszöböt használjuk)</span></div>
+    </div>
+  </div>
+  <h3>És itt jön a tanítás: a veszteség</h3>
+  <p>A tanító script tudja a helyes címkét. A <span class="mono">BCEWithLogitsLoss</span> megméri, mennyire volt rossz a logit. Minél nagyobb a hiba, annál nagyobb a szám. A tanítás egyetlen célja, hogy ez a szám a tanító halmazon átlagosan csökkenjen, a súlyok apró léptetésével.</p>
+  <div class="ctl"><label>Helyes címke</label>
+    <button id="lblBona" class="bona on">bonafide (y = 0)</button>
+    <button id="lblSpoof" class="spoof">spoof (y = 1)</button></div>
+  <div class="calc" id="lossCalc" style="margin-top:10px"></div>
+  <p class="muted" style="font-size:.85rem">A pos_weight ≈ 0,11 azért van, mert a train halmazban 9 spoof jut 1 bonafide-ra. A spoof minták hibáját lekicsinyítjük, hogy a modell ne tanulja meg, hogy „mindent spoof-nak mondok, és 90%-ot találok".</p>
+</section>
+
+<section id="s-params">
+  <div class="eyebrow">Mit tanul a modell?</div>
+  <h2>A tanulható számok</h2>
+  <p>Minden, amit a tanítás módosíthat, ebben a táblázatban van. Ezek a szűrők, a normalizálás skálái és a fej súlyai. Semmi más nem változik: a rétegek sorrendje, a méretek, a ReLU mind rögzített.</p>
+  <div class="tablewrap"><table id="paramTable"></table></div>
+</section>
+</main>
+
+<script>
+(function(){
+const M=80,T=251;
+/* ---------- PRNG ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function gauss(r){const u=1-r(),v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+
+/* ---------- szintetikus mel-spektrogram ---------- */
+const melmax=2595*Math.log10(1+8000/700);
+const binHz=[];for(let m=0;m<M;m++){const mel=m/(M-1)*melmax;binHz.push(700*(Math.pow(10,mel/2595)-1))}
+function genSpec(kind,seed){
+  const r=mulberry32(seed);const out=new Float32Array(M*T);
+  // szótag-kapu: beszéd és rövid szünetek
+  const gate=new Float32Array(T);let t=0;
+  while(t<T){const len=8+Math.floor(r()*12);const pause=2+Math.floor(r()*4);
+    for(let i=0;i<len&&t<T;i++,t++){const e=Math.sin(Math.PI*(i+.5)/len);gate[t]=Math.pow(e,.5)}
+    t+=pause}
+  const f0base=110+r()*60;
+  for(let tt=0;tt<T;tt++){
+    const g=gate[tt];
+    const jitter=kind==="bona"?(r()-.5)*6:0;
+    const f0=f0base*(1+.08*Math.sin(tt/23))+jitter+(kind==="bona"?4*Math.sin(tt/3.1):0);
+    const F1=450+250*Math.sin(tt/19),F2=1300+600*Math.sin(tt/29+1),F3=2600+300*Math.sin(tt/41);
+    for(let m=0;m<M;m++){
+      const f=binHz[m];
+      const env=Math.exp(-Math.pow((f-F1)/160,2))+0.7*Math.exp(-Math.pow((f-F2)/260,2))+0.35*Math.exp(-Math.pow((f-F3)/320,2))+0.03;
+      let p=0;const bw=Math.max(35,f*0.03);
+      for(let k=1;k*f0<8000&&k<60;k++){const d=f-k*f0;p+=Math.exp(-d*d/(2*bw*bw))/Math.pow(k,0.6)}
+      p*=env*g*g;
+      let noise=(kind==="bona"?0.02:0.006)*(0.5+r())*(f>3000?2:1)*(g*0.6+0.4)+(kind==="bona"?0.0015:0.0006)*(0.5+r());
+      if(kind==="spoof"){
+        if(f>4000)p*=0.02;                                   // sávkorlátos vocoder: hiányzó magas sáv
+        if(m%11===0)p+=0.03*g;                               // periodikus zümmögő vonalak
+      }
+      out[m*T+tt]=p+noise;
+    }
+  }
+  let mx=0;for(let i=0;i<out.length;i++)mx=Math.max(mx,out[i]);
+  for(let i=0;i<out.length;i++){out[i]=Math.max(-80,10*Math.log10(out[i]/mx+1e-9))}
+  return out;
+}
+
+/* ---------- színskálák ---------- */
+const seqStops=[[14,10,36],[84,24,112],[178,48,96],[242,120,52],[252,246,190]];
+function lerpColor(stops,v){v=Math.min(1,Math.max(0,v));const n=stops.length-1,x=v*n,i=Math.min(n-1,Math.floor(x)),f=x-i;
+  const a=stops[i],b=stops[i+1];return[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f]}
+function divColor(v){ // -1..1 : kék – fehér – vörös
+  v=Math.min(1,Math.max(-1,v));if(v<0){const f=-v;return[255-f*(255-32),255-f*(255-96),255-f*(255-190)]}
+  return[255-v*(255-200),255-v*(255-60),255-v*(255-50)]}
+function drawHeat(cv,data,H,W,mode){
+  cv.width=W;cv.height=H;const ctx=cv.getContext("2d"),img=ctx.createImageData(W,H);
+  let lo=Infinity,hi=-Infinity;for(let i=0;i<H*W;i++){if(data[i]<lo)lo=data[i];if(data[i]>hi)hi=data[i]}
+  for(let i=0;i<H*W;i++){
+    const y=H-1-Math.floor(i/W),x=i%W;let c;
+    if(mode==="div"){const s=Math.max(Math.abs(lo),Math.abs(hi))||1;c=divColor(data[i]/s)}
+    else if(mode==="db"){c=lerpColor(seqStops,(data[i]+80)/80)}
+    else{c=lerpColor(seqStops,hi>lo?(data[i]-lo)/(hi-lo):0)}
+    const o=(y*W+x)*4;img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255}
+  ctx.putImageData(img,0,0);return{lo,hi}}
+
+/* ---------- a hálózat ---------- */
+function conv2d(x,C,H,W,w,b,O){
+  const out=new Float32Array(O*H*W);
+  for(let o=0;o<O;o++){const ob=o*H*W;
+    for(let c=0;c<C;c++){const xb=c*H*W,wb=(o*C+c)*9;
+      for(let i=0;i<H;i++){const i0=i>0,i1=i<H-1;
+        for(let j=0;j<W;j++){const j0=j>0,j1=j<W-1;let s=x[xb+i*W+j]*w[wb+4];
+          if(i0){const r=xb+(i-1)*W+j;s+=x[r]*w[wb+1];if(j0)s+=x[r-1]*w[wb];if(j1)s+=x[r+1]*w[wb+2]}
+          if(j0)s+=x[xb+i*W+j-1]*w[wb+3];if(j1)s+=x[xb+i*W+j+1]*w[wb+5];
+          if(i1){const r=xb+(i+1)*W+j;s+=x[r]*w[wb+7];if(j0)s+=x[r-1]*w[wb+6];if(j1)s+=x[r+1]*w[wb+8]}
+          out[ob+i*W+j]+=s}}}
+    for(let k=0;k<H*W;k++)out[ob+k]+=b[o]}
+  return out}
+function batchnorm(x,C,HW){const out=new Float32Array(x.length),stats=[];
+  for(let c=0;c<C;c++){let m=0;for(let k=0;k<HW;k++)m+=x[c*HW+k];m/=HW;let v=0;for(let k=0;k<HW;k++){const d=x[c*HW+k]-m;v+=d*d}v/=HW;
+    const s=Math.sqrt(v+1e-5);for(let k=0;k<HW;k++)out[c*HW+k]=(x[c*HW+k]-m)/s;stats.push({mean:m,std:s})}
+  return{out,stats}}
+function relu(x){const o=new Float32Array(x.length);for(let i=0;i<x.length;i++)o[i]=x[i]>0?x[i]:0;return o}
+function maxpool(x,C,H,W){const H2=H>>1,W2=W>>1,o=new Float32Array(C*H2*W2);
+  for(let c=0;c<C;c++)for(let i=0;i<H2;i++)for(let j=0;j<W2;j++){const b=c*H*W+2*i*W+2*j;
+    o[c*H2*W2+i*W2+j]=Math.max(x[b],x[b+1],x[b+W],x[b+W+1])}
+  return{out:o,H:H2,W:W2}}
+const CH=[1,16,32,64];
+function makeWeights(seed){const r=mulberry32(seed);const blocks=[];
+  for(let k=0;k<3;k++){const ci=CH[k],co=CH[k+1],w=new Float32Array(co*ci*9),s=Math.sqrt(2/(ci*9));
+    for(let i=0;i<w.length;i++)w[i]=gauss(r)*s;const b=new Float32Array(co);for(let i=0;i<co;i++)b[i]=gauss(r)*0.05;blocks.push({w,b})}
+  const lw=new Float32Array(64);for(let i=0;i<64;i++)lw[i]=gauss(r)/Math.sqrt(64);
+  return{blocks,lw,lb:gauss(r)*0.1,dropSeed:Math.floor(r()*1e9)}}
+function forward(x,Wt,train){
+  let cur=x,C=1,H=M,W=T;const blocks=[];
+  for(let k=0;k<3;k++){const co=CH[k+1];
+    const conv=conv2d(cur,C,H,W,Wt.blocks[k].w,Wt.blocks[k].b,co);
+    const bn=batchnorm(conv,co,H*W);const act=relu(bn.out);const pool=maxpool(act,co,H,W);
+    blocks.push({conv,bn:bn.out,bnStats:bn.stats,act,pool:pool.out,C:co,H,W,H2:pool.H,W2:pool.W});
+    cur=pool.out;C=co;H=pool.H;W=pool.W}
+  const avg=new Float32Array(64);for(let c=0;c<64;c++){let s=0;for(let k=0;k<H*W;k++)s+=cur[c*H*W+k];avg[c]=s/(H*W)}
+  const r=mulberry32(Wt.dropSeed);const drop=new Float32Array(64),mask=[];
+  for(let c=0;c<64;c++){const keep=!train||r()>=0.3;mask.push(keep);drop[c]=train?(keep?avg[c]/0.7:0):avg[c]}
+  const prod=new Float32Array(64);let logit=Wt.lb;for(let c=0;c<64;c++){prod[c]=drop[c]*Wt.lw[c];logit+=prod[c]}
+  return{blocks,avg,drop,mask,prod,logit,H,W}}
+
+/* ---------- állapot ---------- */
+const S={kind:"bona",seed:7,train:true,label:0,sel:[0,0,0]};
+let X,Wt,F;
+const $=id=>document.getElementById(id);
+const fmt=(v,d=2)=>(v<0?"−":"")+Math.abs(v).toFixed(d);
+
+/* ---------- kernel előre beállítások ---------- */
+const KERNELS={
+  "Egység (nem változtat)":[0,0,0,0,1,0,0,0,0],
+  "Időbeli változás (hangkezdetek)":[-1,0,1,-2,0,2,-1,0,1],
+  "Frekvenciabeli változás (felhangok élei)":[-1,-2,-1,0,0,0,1,2,1],
+  "Elmosás (átlag)":[1/9,1/9,1/9,1/9,1/9,1/9,1/9,1/9,1/9],
+  "Élesítés":[0,-1,0,-1,5,-1,0,-1,0],
+  "Véletlen (tanítatlan modell)":null};
+function kernelUI(sel,grid,onChange){
+  for(const k in KERNELS){const o=document.createElement("option");o.textContent=k;sel.appendChild(o)}
+  const inputs=[];for(let i=0;i<9;i++){const inp=document.createElement("input");inp.type="number";inp.step="0.1";inp.id=grid.id+"_"+i;grid.appendChild(inp);inputs.push(inp);inp.addEventListener("input",()=>onChange(get()))}
+  function get(){return inputs.map(i=>parseFloat(i.value)||0)}
+  function set(v){inputs.forEach((i,k)=>i.value=Math.round(v[k]*100)/100)}
+  sel.addEventListener("change",()=>{let v=KERNELS[sel.value];if(!v){const r=mulberry32(Date.now()&0xffff);v=Array.from({length:9},()=>gauss(r)*0.5)}set(v);onChange(get())});
+  sel.selectedIndex=1;set(KERNELS[sel.value]);return{get,set}}
+
+/* ---------- 1. bemenet ---------- */
+function renderInput(){drawHeat($("cInput"),X,M,T,"db")}
+
+/* ---------- 2. lépésenkénti konvolúció ---------- */
+const step={pos:0,timer:null,inp:[],out:[]};
+const stepK=kernelUI($("stepKernel"),$("stepK"),()=>stepReset());
+function stepData(){const r0=30,c0=120;step.inp=[];for(let i=0;i<6;i++){const row=[];for(let j=0;j<6;j++){const v=X[(r0+5-i)*T+c0+j];row.push(Math.round((v+80)/80*9))}step.inp.push(row)}}
+function buildGrid(el,n,cls){el.innerHTML="";const cells=[];for(let i=0;i<n*n;i++){const d=document.createElement("div");d.className="cell "+(cls||"");el.appendChild(d);cells.push(d)}return cells}
+let stepInCells,stepOutCells;
+function stepReset(){clearInterval(step.timer);step.timer=null;$("stepPlay").textContent="Lejátszás";step.pos=0;stepData();
+  stepInCells=buildGrid($("stepIn"),8);stepOutCells=buildGrid($("stepOut"),6);
+  stepInCells.forEach((c,i)=>{const r=Math.floor(i/8),q=i%8;if(r===0||r===7||q===0||q===7){c.textContent="0";c.classList.add("pad")}else c.textContent=step.inp[r-1][q-1]});
+  stepOutCells.forEach(c=>c.textContent="·");$("stepCalc").textContent="Nyomj a Lépés gombra.";$("stepPos").textContent="0 / 36";stepPaint(-1)}
+function stepPaint(pos){stepInCells.forEach(c=>c.classList.remove("win","cur"));if(pos<0)return;const r=Math.floor(pos/6),q=pos%6;
+  for(let di=0;di<3;di++)for(let dj=0;dj<3;dj++)stepInCells[(r+di)*8+q+dj].classList.add("win");stepInCells[(r+1)*8+q+1].classList.add("cur")}
+function stepDo(){if(step.pos>=36){clearInterval(step.timer);step.timer=null;$("stepPlay").textContent="Lejátszás";return}
+  const pos=step.pos,r=Math.floor(pos/6),q=pos%6,k=stepK.get();let s=0;const terms=[];
+  for(let di=0;di<3;di++)for(let dj=0;dj<3;dj++){const rr=r+di-1,cc=q+dj-1;const v=(rr<0||rr>5||cc<0||cc>5)?0:step.inp[rr][cc];const w=k[di*3+dj];s+=v*w;terms.push(`${v}·${fmt(w,1)}`)}
+  stepPaint(pos);const oc=stepOutCells[pos];oc.textContent=fmt(s,1).replace(".0","");oc.classList.add("done",s<0?"neg":s>0?"pos":"");
+  $("stepCalc").textContent=`[${r},${q}]: `+terms.join(" + ")+` = ${fmt(s,1)}`;step.pos++;$("stepPos").textContent=`${step.pos} / 36`}
+$("stepNext").addEventListener("click",stepDo);
+$("stepReset").addEventListener("click",stepReset);
+$("stepPlay").addEventListener("click",()=>{if(step.timer){clearInterval(step.timer);step.timer=null;$("stepPlay").textContent="Lejátszás";return}
+  if(step.pos>=36)stepReset();step.timer=setInterval(stepDo,320);$("stepPlay").textContent="Szünet"});
+
+/* ---------- 3. szűrő a teljes képen ---------- */
+const filtK=kernelUI($("filtKernel"),$("filtK"),renderFilter);
+$("filtRelu").addEventListener("change",()=>renderFilter(filtK.get()));
+function renderFilter(k){const w=new Float32Array(k),b=new Float32Array([0]);let y=conv2d(X,1,M,T,w,b,1);const useRelu=$("filtRelu").checked;
+  if(useRelu){y=relu(y);drawHeat($("cFilt"),y,M,T,"seq");$("filtLegend").textContent="ReLU után: sötét = 0, világos = erős pozitív válasz. Ez megy tovább a következő rétegnek."}
+  else{drawHeat($("cFilt"),y,M,T,"div");$("filtLegend").textContent="Konvolúció nyers kimenete: kék = negatív, fehér = 0, vörös = pozitív. Ahol a szűrő mintája illik a képre, ott erős a válasz."}}
+
+/* ---------- 4. BN / ReLU / Pool demók ---------- */
+function renderOps(){
+  const st=F.blocks[0].bnStats[0];$("bnCalc").innerHTML=`konv. kimenet: átlag ${fmt(st.mean)}, szórás ${fmt(st.std)}<br>BatchNorm után: átlag 0.00, szórás 1.00<br>képlet: (x − ${fmt(st.mean)}) / ${fmt(st.std)}`;
+  const b0=F.blocks[0],vals=[];for(let i=0;i<8;i++)vals.push(b0.bn[40*T+100+i*7]);
+  $("reluIn").innerHTML=vals.map(v=>`<span class="${v<0?'neg':''}">${fmt(v)}</span>`).join("");
+  $("reluOut").innerHTML=vals.map(v=>`<span>${fmt(Math.max(0,v))}</span>`).join("");
+  const pi=buildGrid($("poolIn"),4),po=buildGrid($("poolOut"),2);const a=b0.act;const base=20*T+60;const vv=[];
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++)vv.push(a[base+i*T+j]);
+  const maxes=[];for(let i=0;i<2;i++)for(let j=0;j<2;j++){let best=-1,bi=0;for(let di=0;di<2;di++)for(let dj=0;dj<2;dj++){const idx=(2*i+di)*4+2*j+dj;if(vv[idx]>best){best=vv[idx];bi=idx}}maxes.push(bi);po[i*2+j].textContent=fmt(best,1);po[i*2+j].classList.add("cur")}
+  pi.forEach((c,i)=>{c.textContent=fmt(vv[i],1);if(maxes.includes(i))c.classList.add("win")})}
+
+/* ---------- 5. blokkok ---------- */
+function renderBlocks(){const host=$("blocks");host.innerHTML="";
+  F.blocks.forEach((b,k)=>{
+    const sec=document.createElement("div");sec.style.marginTop=k?"22px":"8px";
+    sec.innerHTML=`<h3>Blokk ${k+1}: Conv2d(${CH[k]}→${CH[k+1]}, 3×3) → BatchNorm2d(${CH[k+1]}) → ReLU → MaxPool2d(2)</h3>
+      <div class="flow"><b>(${CH[k]}, ${b.H}, ${b.W})</b> → konvolúció → <b>(${CH[k+1]}, ${b.H}, ${b.W})</b> → BN, ReLU → <b>(${CH[k+1]}, ${b.H}, ${b.W})</b> → MaxPool → <b>(${CH[k+1]}, ${b.H2}, ${b.W2})</b></div>
+      <div class="tiles" id="tiles${k}" style="margin-top:10px"></div><div class="stages" id="stages${k}"></div>`;
+    host.appendChild(sec);
+    const tiles=$("tiles"+k);
+    for(let c=0;c<b.C;c++){const btn=document.createElement("button");btn.className="tile"+(c===S.sel[k]?" sel":"");btn.id=`tile${k}_${c}`;btn.setAttribute("aria-label",`${k+1}. blokk ${c}. csatorna`);
+      const cv=document.createElement("canvas");btn.appendChild(cv);const sp=document.createElement("span");sp.textContent="cs. "+c;btn.appendChild(sp);
+      drawHeat(cv,b.pool.subarray(c*b.H2*b.W2,(c+1)*b.H2*b.W2),b.H2,b.W2,"seq");
+      btn.addEventListener("click",()=>{S.sel[k]=c;tiles.querySelectorAll(".tile").forEach(t=>t.classList.remove("sel"));btn.classList.add("sel");renderStages(k)});
+      tiles.appendChild(btn)}
+    renderStages(k)})}
+function renderStages(k){const b=F.blocks[k],c=S.sel[k],host=$("stages"+k);host.innerHTML="";
+  const HW=b.H*b.W,HW2=b.H2*b.W2;
+  const defs=[["1. konvolúció (nyers)",b.conv.subarray(c*HW,(c+1)*HW),b.H,b.W,"div"],["2. BatchNorm",b.bn.subarray(c*HW,(c+1)*HW),b.H,b.W,"div"],
+    ["3. ReLU",b.act.subarray(c*HW,(c+1)*HW),b.H,b.W,"seq"],["4. MaxPool",b.pool.subarray(c*HW2,(c+1)*HW2),b.H2,b.W2,"seq"]];
+  defs.forEach(([title,data,H,W,mode])=>{const d=document.createElement("div");d.className="stage";d.innerHTML=`<h4>${title} <span class="shape">· ${c}. csatorna · ${H}×${W}</span></h4>`;
+    const cv=document.createElement("canvas");cv.className="heat";d.appendChild(cv);const r=drawHeat(cv,data,H,W,mode);
+    const s=document.createElement("div");s.className="shape";s.textContent=`min ${fmt(r.lo)} · max ${fmt(r.hi)}`;d.appendChild(s);host.appendChild(d)})}
+
+/* ---------- 6. fej ---------- */
+function bars(el,vals,center,colorFn){el.innerHTML="";let mx=0;for(const v of vals)mx=Math.max(mx,Math.abs(v));mx=mx||1;
+  vals.forEach((v,i)=>{const d=document.createElement("div");const h=Math.abs(v)/mx*(center?45:100);
+    if(center){d.style.position="absolute";d.style.left=(i/vals.length*100)+"%";d.style.width=(100/vals.length-0.4)+"%";d.style.height=h+"%";d.style.top=(v>=0?50-h:50)+"%"}
+    else d.style.height=h+"%";
+    d.style.background=colorFn?colorFn(v,i):"var(--accent)";d.title=`#${i}: ${fmt(v,3)}`;el.appendChild(d)})}
+function renderHead(){
+  bars($("avgBars"),F.avg,false);
+  bars($("dropBars"),F.drop,false,(v,i)=>F.mask[i]?"var(--accent)":"var(--line)");
+  const dropped=F.mask.filter(m=>!m).length;
+  $("dropNote").textContent=S.train?`tanítás: ${dropped} csatorna véletlenül kikapcsolva, a többi ×1/0,7-tel felskálázva, hogy az összeg várható értéke ne változzon`:"következtetés: a dropout nem csinál semmit, mind a 64 szám átmegy";
+  bars($("wBars"),Wt.lw,true,v=>v>=0?"var(--accent)":"var(--spoof)");
+  bars($("prodBars"),F.prod,true,v=>v>=0?"var(--accent)":"var(--spoof)");
+  let sum=0;for(const p of F.prod)sum+=p;
+  $("linCalc").innerHTML=`logit = Σ xᵢ·wᵢ + b = ${fmt(sum,3)} + (${fmt(Wt.lb,3)}) = <strong>${fmt(F.logit,3)}</strong>`;
+  const p=1/(1+Math.exp(-F.logit));
+  $("logitVal").textContent=fmt(F.logit,3);$("logitVal").style.color=F.logit>0?"var(--spoof)":"var(--bona)";
+  $("probVal").textContent=(p*100).toFixed(1)+" %";$("gaugePin").style.left=(p*100)+"%";
+  const dec=$("decision");dec.textContent=p>=0.5?"spoof":"bonafide";dec.className="pill "+(p>=0.5?"spoof":"bona");
+  const pw=0.113,y=S.label;const loss=-(pw*y*Math.log(p+1e-12)+(1-y)*Math.log(1-p+1e-12));
+  $("lossCalc").innerHTML=`y = ${y}, p = ${p.toFixed(4)}, pos_weight = ${pw}<br>loss = −[ pos_weight · y · ln(p) + (1 − y) · ln(1 − p) ] = <strong>${loss.toFixed(4)}</strong><br><span class="muted">${y===1?(p>0.5?"A modell jó irányba tippelt, a hiba kicsi.":"A modell bonafide-ot tippelt egy spoof-ra: a hiba nagy, a tanítás ezt büntetné (0,11-es súllyal).") :(p<0.5?"A modell jó irányba tippelt, a hiba kicsi.":"A modell spoof-ot tippelt egy bonafide-ra: a hiba nagy, teljes súllyal számít.")}</span>`}
+
+/* ---------- 7. paraméterek ---------- */
+function renderParams(){const rows=[];let total=0;
+  for(let k=0;k<3;k++){const ci=CH[k],co=CH[k+1];const pc=co*ci*9+co,pb=2*co;total+=pc+pb;
+    rows.push([`Conv2d(${ci}→${co}, 3×3)`,`${co}×${ci}×3×3 súly + ${co} bias`,pc]);rows.push([`BatchNorm2d(${co})`,`${co} γ + ${co} β`,pb])}
+  rows.push(["Linear(64→1)","64 súly + 1 bias",65]);total+=65;
+  $("paramTable").innerHTML=`<tr><th>Réteg</th><th>Mi tanulható</th><th class="n">Számok</th></tr>`+rows.map(r=>`<tr><td class="mono">${r[0]}</td><td>${r[1]}</td><td class="n">${r[2].toLocaleString("hu-HU")}</td></tr>`).join("")+
+    `<tr><td><strong>Összesen</strong></td><td class="muted">ReLU, MaxPool, AvgPool, Dropout: nincs tanulható számuk</td><td class="n"><strong>${total.toLocaleString("hu-HU")}</strong></td></tr>`}
+
+/* ---------- vezérlés ---------- */
+function recompute(){X=genSpec(S.kind,S.kind==="bona"?11:23);Wt=makeWeights(S.seed);F=forward(X,Wt,S.train);
+  renderInput();stepReset();renderFilter(filtK.get());renderOps();renderBlocks();renderHead()}
+function toggle(a,b,on){a.classList.toggle("on",on);b.classList.toggle("on",!on)}
+$("btnBona").addEventListener("click",()=>{S.kind="bona";toggle($("btnBona"),$("btnSpoof"),true);recompute()});
+$("btnSpoof").addEventListener("click",()=>{S.kind="spoof";toggle($("btnBona"),$("btnSpoof"),false);recompute()});
+$("btnSeed").addEventListener("click",()=>{S.seed=Math.floor(Math.random()*1e9);recompute()});
+$("btnTrain").addEventListener("click",()=>{S.train=true;toggle($("btnTrain"),$("btnEval"),true);F=forward(X,Wt,true);renderHead()});
+$("btnEval").addEventListener("click",()=>{S.train=false;toggle($("btnTrain"),$("btnEval"),false);F=forward(X,Wt,false);renderHead()});
+$("lblBona").addEventListener("click",()=>{S.label=0;toggle($("lblBona"),$("lblSpoof"),true);renderHead()});
+$("lblSpoof").addEventListener("click",()=>{S.label=1;toggle($("lblBona"),$("lblSpoof"),false);renderHead()});
+renderParams();recompute();
+})();
+</script>
+
+</body>
+</html>

@@ -4,6 +4,7 @@ audio:
   n_fft: 1024
   hop: 256
   n_mels: 80
+  trim_db: 30
 
 data:
   root: data/LA

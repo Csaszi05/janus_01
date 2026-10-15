@@ -3,3 +3,5 @@ pandas
 pyyaml
 matplotlib
 torch
+scikit-learn
+numpy

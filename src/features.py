@@ -2,8 +2,9 @@ import librosa
 import numpy as np
 
 
-def load_audio(path, sr=16000, max_sec=4.0):
+def load_audio(path, sr=16000, max_sec=4.0, trim_db=30):
     y, _ = librosa.load(path, sr=sr, mono=True)
+    y, _ = librosa.effects.trim(y, top_db=trim_db)
     n = int(sr * max_sec)
     if len(y) >= n:
         return y[:n]
