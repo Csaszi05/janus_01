@@ -94,3 +94,17 @@ Folyamatos napló arról, hogy mit miért csináltunk így. Új bejegyzés mindi
 **10 epoch, batch 64, lr 1e-3.** Kiinduló értékek a spec alapján. Ha a dev EER az 5. epoch után még javul, több epoch; ha már a 2–3. után romlik, túltanulás, kevesebb epoch vagy erősebb regularizáció.
 
 **A checkpoint `weights_only=False`-szal töltődik.** A checkpointban a config dict is benne van, az újabb torch alapból csak tenzorokat enged betölteni. Saját fájlunk, biztonságos.
+
+## 2026-10-17 – Kiértékelés (`src/evaluate.py`, `notebooks/03_eval_kaggle.ipynb`)
+
+**Külön script, nem a train.py része.** A kiértékelés más életciklusú: egy checkpointot többször, több halmazon is futtatunk, és az eval halmaz 71 ezer fájlja miatt önmagában is hosszú. Így a tanítást nem terheli.
+
+**Az audio config a checkpointból jön, nem a config.yaml-ból.** A spektrogramot pontosan úgy kell számolni, ahogy a modell tanulta. Ha közben átírjuk a config.yaml-t, a kiértékelés akkor is a tanításkori beállítást használja. Ezért került bele a config a checkpointba.
+
+**Támadásonkénti EER: bonafide vs. egy-egy támadás.** Minden A07–A19 rendszerre külön EER, mindig a teljes bonafide halmazzal szemben. Ez az ASVspoof-irodalom szokásos bontása, és megmutatja, melyik támadástípus fog ki a modellen.
+
+**Pontszámok CSV-be.** Minden fájl logitja mentve (`eval_scores.csv`). Későbbi elemzés (küszöbválasztás, hibaelemzés, min t-DCF) ebből megy, nem kell újra pontozni.
+
+**min t-DCF egyelőre nincs.** Az ASVspoof másik hivatalos metrikája, de hozzá az ASV-rendszer pontszámai kellenek, amik külön fájlban vannak. Az EER-bontás most elég a modell fejlesztéséhez; a t-DCF a végső összehasonlításhoz jön.
+
+**A notebook először a dev halmazon fut.** A tanításkor mért 4.88%-ot kell visszaadnia. Ez ellenőrzi, hogy a checkpoint és a feature-számítás konzisztens, mielőtt egy órát töltünk az eval halmazzal.
