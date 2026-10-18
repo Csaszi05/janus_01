@@ -34,3 +34,60 @@ Minden futás egy bejegyzés: mi volt a beállítás, mi jött ki, mit tanultunk
 - A cache a `/tmp`-ben elveszett a kernel leállásával; minden új futás 23 perccel indul, amíg nincs megőrzött cache.
 
 **Következő lépések:** (1) eval halmaz kiértékelése támadástípusonként ezzel a checkpointtal, (2) 30 epoch + lr-ütemező, (3) cache megőrzése Kaggle-adathalmazként.
+
+## Run 1 – kiértékelés, 2026-10-17 (Kaggle, T4)
+
+**Checkpoint:** Run 1, 10. epoch. **Script:** `src/evaluate.py`, commit `cbad3f4`.
+
+**Dev: 4.88%** (egyezik a tanításkor mérttel, a checkpoint és a feature-számítás konzisztens).
+
+| Dev támadás | EER |
+|---|---|
+| A01 (WaveNet TTS) | 1.64% |
+| A02 (WORLD TTS) | 2.46% |
+| A03 (WORLD TTS) | 2.55% |
+| A04 (konkatenatív TTS) | 9.77% |
+| A05 (WORLD VC) | 4.58% |
+| A06 (spektrális szűrés VC) | 3.80% |
+
+**Eval: 24.30%** (7 355 bonafide, 63 882 spoof). Viszonyítás: LFCC-GMM baseline eval 8.09%.
+
+| Eval támadás | EER | |
+|---|---|---|
+| A07 | 4.20% | jó |
+| A08 | 1.56% | jó |
+| A09 | 2.33% | jó |
+| A10 (Tacotron2 + WaveRNN) | 35.91% | rossz |
+| A11 | 3.82% | jó |
+| A12 (Tacotron + WaveNet) | 56.31% | véletlennél rosszabb |
+| A13 (VC + TTS, hullámforma-szűrés) | 57.05% | véletlennél rosszabb |
+| A14 | 13.90% | közepes |
+| A15 (VC, WaveNet) | 34.99% | rossz |
+| A16 | 6.73% | jó |
+| A17 (VAE VC, hullámforma-szűrés) | 35.01% | rossz |
+| A18 | 4.60% | jó |
+| A19 | 4.54% | jó |
+
+**Tanulságok:**
+- Dev és eval között ötszörös különbség: a modell a train halmaz hat rendszerének nyomait tanulta meg, nem általános spoof-jellemzőket. Ahol az eval támadás hasonló technológiájú, ott jó; ahol új neurális vocoder (WaveNet, WaveRNN) készítette, ott nem.
+- A12 és A13 56–57%: ezeket a hamisítványokat a modell átlagosan valódibbnak pontozza, mint az igazi felvételeket. Nem "nem tudja", hanem rossz irányba biztos.
+- A04 a dev halmazon is a legnehezebb (9.77%): konkatenatív szintézis, valódi hullámforma-darabokból, ezért a legkevesebb vocoder-nyom.
+- A17 az irodalomban is a legnehezebb támadás; ott a legjobb rendszerek is 10–30% körül vannak.
+- Ez a várt viselkedés egy kis, augmentáció nélküli baseline-nál. Most van viszonyítási alap a generalizációt javító lépésekhez.
+
+**Hiba, javítva:** a notebook rekurzív glob-ja a teljes adathalmazt bejárta a mappák megkereséséhez: 80 perc a DATA_ROOT, további 54 perc a checkpoint. 2 óra 15 perc felesleges várakozás. Commit `0c7ccd4`: szélességi keresés max 5 szint mélyen, nem jár be fájlokat.
+
+**Idő (javítás után várható):** dev cache ~15 perc, eval cache ~45 perc, pontozás pár perc.
+
+**Következő lépések, sorrendben:**
+1. Generalizáció javítása: adat-augmentáció a tanításban (véletlen erősítés, zaj, időbeli eltolás; később RawBoost-szerű). Cél: a modell ne a konkrét vocoder-nyomokra tanuljon rá.
+2. 30 epoch + lr-ütemező (a dev-görbe ugrálása miatt).
+3. Mérés mindig az eval halmazon, támadásonként. A dev EER önmagában félrevezető.
+
+## Run 2 – augmentáció + cosine, 2026-10-18 (tervezett)
+
+**Változás Run 1-hez képest:** `--augment` (SpecAugment a train halmazon, config.yaml `augment` szekció), `--sched cosine`, 30 epoch. Minden más azonos.
+
+**Hipotézis:** az eval EER érdemben 24,3% alá megy, az A10/A12/A13/A15/A17 sorok javulnak. A dev EER kicsit romolhat.
+
+**Eredmény:** (futás után)

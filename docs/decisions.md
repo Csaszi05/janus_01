@@ -108,3 +108,23 @@ Folyamatos napló arról, hogy mit miért csináltunk így. Új bejegyzés mindi
 **min t-DCF egyelőre nincs.** Az ASVspoof másik hivatalos metrikája, de hozzá az ASV-rendszer pontszámai kellenek, amik külön fájlban vannak. Az EER-bontás most elég a modell fejlesztéséhez; a t-DCF a végső összehasonlításhoz jön.
 
 **A notebook először a dev halmazon fut.** A tanításkor mért 4.88%-ot kell visszaadnia. Ez ellenőrzi, hogy a checkpoint és a feature-számítás konzisztens, mielőtt egy órát töltünk az eval halmazzal.
+
+## 2026-10-18 – Run 2: augmentáció és ütemező
+
+**Miért augmentáció:** Run 1 eval eredménye (24,3%, A12/A13 56–57%) azt mutatta, hogy a modell a train halmaz hat rendszerének vocoder-nyomait tanulta meg, nem általános spoof-jellemzőket. A "tiszta = valódi" szabály a modern neurális vocodereken fordítva sül el. Az augmentáció ezt a szabályt teszi használhatatlanná, és mélyebb jellemzők tanulására kényszerít. A szakirodalomban ez a legolcsóbb, legjobban bevált első lépés.
+
+**A spektrogramon, nem a hangon.** A cache a tiszta mel-spektrogramot tárolja; az augmentáció betöltéskor, memóriában történik. Így a cache érvényes marad, és minden epochban más torzítást kap a minta. Hangon augmentálni minden epochban 23 perces újraszámolást jelentene.
+
+**Három művelet (SpecAugment-szerű):** zajpadló hozzáadása teljesítmény-tartományban (−50…−20 dB, a fájl maximumához képest), 2 frekvenciasáv-maszk (max 8 mel-sor), 2 időmaszk (max 20 oszlop). A maszk kitöltő értéke a spektrogram átlaga, nem −80: a nulla-energiás lyuk önmagában tanulható nyom lenne.
+
+**Nincs hangerő-augmentáció.** A `mel_db` a fájl maximumához normalizál (`ref=np.max`), ezért a hangerő eleve kiesik. Felesleges lenne.
+
+**torch véletlen, nem numpy.** A DataLoader worker-ek numpy-seedje azonos lenne (minden worker ugyanazt a torzítást adná), a torch worker-enként külön seedet kap.
+
+**Csak a train halmazon.** Dev és eval tiszta marad; a mérésnek a valódi adatot kell mutatnia.
+
+**Cosine ütemező, 30 epoch.** Run 1-ben a dev EER epochról epochra ugrált (8,6 → 20,6 → 12,8) állandó lr mellett. A cosine simán nullára viszi az lr-t, az utolsó epochok finomhangolnak. Nincs paramétere, nem kell hangolni. Alternatíva lett volna a ReduceLROnPlateau, de az a zajos dev EER-re reagálna.
+
+**Kapcsolók, nem alapértelmezés.** `--augment` és `--sched cosine` külön kapcsolók, Run 1 változatlan parancssorral reprodukálható.
+
+**Checkpoint-választás továbbra is dev EER alapján.** Az eval halmaz tanítás közben tiltott; ha azon választanánk, az eredmény nem lenne hiteles. Számítunk rá, hogy a dev EER kicsit romlik az augmentáció miatt, ez elfogadható.

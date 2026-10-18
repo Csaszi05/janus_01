@@ -31,11 +31,12 @@ class MelDataset(Dataset):
     igy a masodik epochtol nem szamol ujra.
     """
 
-    def __init__(self, df, audio_cfg, cache_dir=None):
+    def __init__(self, df, audio_cfg, cache_dir=None, augment=None):
         self.paths = df["path"].tolist()
         self.files = df["file"].tolist()
         self.y = df["y"].to_numpy(dtype=np.float32)
         self.cfg = audio_cfg
+        self.augment = augment
         self.cache_dir = Path(cache_dir) if cache_dir else None
         if self.cache_dir:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -54,6 +55,28 @@ class MelDataset(Dataset):
             np.save(cache, m)
         return m
 
+    def _augment(self, m):
+        """SpecAugment-szeru torzitas a dB-s mel-spektrogramon. torch veletlent hasznal,
+        hogy a DataLoader worker-ek kulonbozo sorozatot kapjanak."""
+        a = self.augment
+        m = m.copy()
+        # zajpadlo: teljesitmenyben osszeadjuk egy veletlen szintu egyenletes zajjal
+        noise_db = a["noise_db_min"] + torch.rand(()).item() * (a["noise_db_max"] - a["noise_db_min"])
+        m = 10 * np.log10(10 ** (m / 10) + 10 ** (noise_db / 10)).astype(np.float32)
+        fill = m.mean()
+        n_mels, T = m.shape
+        for _ in range(a["n_freq_masks"]):
+            w = int(torch.randint(0, a["freq_mask_max"] + 1, ()))
+            f0 = int(torch.randint(0, n_mels - w + 1, ()))
+            m[f0 : f0 + w, :] = fill
+        for _ in range(a["n_time_masks"]):
+            w = int(torch.randint(0, a["time_mask_max"] + 1, ()))
+            t0 = int(torch.randint(0, T - w + 1, ()))
+            m[:, t0 : t0 + w] = fill
+        return m
+
     def __getitem__(self, i):
-        m = torch.from_numpy(self._mel(i)).unsqueeze(0)
-        return m, torch.tensor(self.y[i])
+        m = self._mel(i)
+        if self.augment:
+            m = self._augment(m)
+        return torch.from_numpy(m).unsqueeze(0), torch.tensor(self.y[i])

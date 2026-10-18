@@ -6,5 +6,13 @@ audio:
   n_mels: 80
   trim_db: 30
 
+augment:            # csak tanitaskor, a cache-elt mel-spektrogramon (train.py --augment)
+  noise_db_min: -50 # zajpadlo szintje dB-ben, a fajl maximumahoz kepest
+  noise_db_max: -20
+  n_freq_masks: 2   # ennyi veletlen frekvenciasavot nullazunk
+  freq_mask_max: 8  # max savszelesseg mel-sorban
+  n_time_masks: 2   # ennyi veletlen idoszakaszt nullazunk
+  time_mask_max: 20 # max hossz oszlopban (20 oszlop = 0.32 s)
+
 data:
   root: data/LA
