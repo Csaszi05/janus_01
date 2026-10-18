@@ -7,8 +7,8 @@ audio:
   trim_db: 30
 
 augment:            # csak tanitaskor, a cache-elt mel-spektrogramon (train.py --augment)
-  noise_db_min: -50 # zajpadlo szintje dB-ben, a fajl maximumahoz kepest
-  noise_db_max: -20
+  noise_db_min: -70 # zajpadlo szintje dB-ben, a fajl maximumahoz kepest (0 dB = max, -80 = padlo)
+  noise_db_max: -45 # Run 2-ben -50..-20 volt: tul eros, a spektrogram nagy reszet elfedte
   n_freq_masks: 2   # ennyi veletlen frekvenciasavot nullazunk
   freq_mask_max: 8  # max savszelesseg mel-sorban
   n_time_masks: 2   # ennyi veletlen idoszakaszt nullazunk

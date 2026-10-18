@@ -84,10 +84,54 @@ Minden futás egy bejegyzés: mi volt a beállítás, mi jött ki, mit tanultunk
 2. 30 epoch + lr-ütemező (a dev-görbe ugrálása miatt).
 3. Mérés mindig az eval halmazon, támadásonként. A dev EER önmagában félrevezető.
 
-## Run 2 – augmentáció + cosine, 2026-10-18 (tervezett)
+## Run 2 – augmentáció + cosine, 2026-10-18 (Kaggle, T4)
 
-**Változás Run 1-hez képest:** `--augment` (SpecAugment a train halmazon, config.yaml `augment` szekció), `--sched cosine`, 30 epoch. Minden más azonos.
+**Kód:** commit `9ea8c16`. **Változás Run 1-hez képest:** `--augment` (SpecAugment a train halmazon: zajpadló −50…−20 dB, 2 frekvenciamaszk max 8 sor, 2 időmaszk max 20 oszlop), `--sched cosine`, 30 epoch. Minden más azonos.
 
-**Hipotézis:** az eval EER érdemben 24,3% alá megy, az A10/A12/A13/A15/A17 sorok javulnak. A dev EER kicsit romolhat.
+**Hipotézis volt:** az eval EER érdemben 24,3% alá megy, az A10/A12/A13/A15/A17 sorok javulnak. A dev EER kicsit romolhat.
 
-**Eredmény:** (futás után)
+**Eredmény: a hipotézis nem jött be. Az augmentáció túl erős volt.**
+
+| Epoch | lr | Train loss | Dev EER |
+|---|---|---|---|
+| 2 | 1.0e-3 | 0.1375 | 33.51% |
+| 5 | 9.6e-4 | 0.1238 | 27.63% |
+| 6 | 9.3e-4 | 0.1193 | 47.99% |
+| 10 | 7.9e-4 | 0.1029 | 20.95% |
+| 15 | 5.5e-4 | 0.0871 | 23.78% |
+| 19 | 3.5e-4 | 0.0781 | 18.62% |
+| 21 | 2.5e-4 | 0.0725 | 18.33% |
+| 24 | 1.3e-4 | 0.0689 | **16.77%** |
+| 27 | 4.3e-5 | 0.0668 | 17.40% |
+| 30 | 2.7e-6 | 0.0667 | 16.92% |
+
+**Legjobb dev EER: 16.77% (24. epoch).** Run 1-ben 4.88% volt 10 epoch után. A train loss 30 epoch után 0.067, Run 1-ben 10 epoch után 0.029.
+
+**Eval, támadásonként (Run 1 → Run 2):**
+
+| Eval támadás | Run 1 | Run 2 | |
+|---|---|---|---|
+| A07 | 4.20% | 26.89% | sokkal rosszabb |
+| A08 | 1.56% | 12.60% | rosszabb |
+| A09 | 2.33% | 7.99% | rosszabb |
+| A10 (Tacotron2 + WaveRNN) | 35.91% | 44.75% | rosszabb |
+| A11 | 3.82% | 44.42% | sokkal rosszabb |
+| A12 (Tacotron + WaveNet) | 56.31% | 39.30% | jobb |
+| A13 (VC + TTS, hullámforma-szűrés) | 57.05% | 12.35% | sokkal jobb |
+| A14 | 13.90% | 31.02% | rosszabb |
+| A15 (VC, WaveNet) | 34.99% | 26.51% | jobb |
+| A16 | 6.73% | 31.01% | sokkal rosszabb |
+| A17 (VAE VC, hullámforma-szűrés) | 35.01% | 22.08% | jobb |
+| A18 | 4.60% | 25.67% | sokkal rosszabb |
+| A19 | 4.54% | 22.94% | sokkal rosszabb |
+
+Az összesített eval EER nem került a naplóba; a per-attack sorokból látszik, hogy 24,3%-nál rosszabb.
+
+**Tanulságok:**
+- **A zajpadló volt a hiba.** A `mel_db` a fájl maximumához normalizál: a leghangosabb pont 0 dB, a padló −80 dB. A −50…−20 dB-es zaj ebből mindent elfed, ami a zaj szintje alatt van. −20 dB-nél ez a spektrogram nagy része. A modell a tanítás alatt soha nem látott tiszta spektrogramot, a dev és az eval viszont tiszta. Ez tanítás–teszt eltérés, nem regularizáció.
+- **A modell "elfelejtette" a finom nyomokat.** Ahol Run 1 jó volt (A07, A08, A11, A16, A18, A19: 2–7%), ott most 8–44%. Ezek a támadások a halk tartományban, a finom spektrális szerkezetben különböznek a valódi hangtól; a zaj pont ezt törölte.
+- **A nehéz támadásokon viszont javult** (A12 56 → 39%, A13 57 → 12%, A15 35 → 27%, A17 35 → 22%). A "tiszta = valódi" szabály tényleg megszűnt, ahogy vártuk. Tehát az irány jó, az adag rossz.
+- **A dev EER továbbra is ugrál** az első 10 epochban (33 → 36 → 28 → 48 → 27%), az utolsó 10-ben már simább (16,8–19,1%). A cosine ütemező a vége felé azt csinálja, amit kell. Az eleji ugrálás az erős augmentációból jön, nem az lr-ből.
+- **Két dolgot változtattunk egyszerre** (augmentáció + ütemező), ezért a két hatás nem válik szét tisztán. Az ütemezőt megtartjuk, az augmentációt gyengítjük; így Run 3 egy változtatás lesz Run 2-höz képest.
+
+**Következő lépés (Run 3):** a zajpadló −70…−45 dB-re (csak a legcsendesebb részeket érinti), a maszkok maradnak. Cosine, 30 epoch marad. Várakozás: dev EER visszamegy 5–8% közé, az eval a könnyű támadásokon Run 1 közelébe, a nehezeken Run 2 közelébe.

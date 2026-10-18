@@ -128,3 +128,15 @@ Folyamatos napló arról, hogy mit miért csináltunk így. Új bejegyzés mindi
 **Kapcsolók, nem alapértelmezés.** `--augment` és `--sched cosine` külön kapcsolók, Run 1 változatlan parancssorral reprodukálható.
 
 **Checkpoint-választás továbbra is dev EER alapján.** Az eval halmaz tanítás közben tiltott; ha azon választanánk, az eredmény nem lenne hiteles. Számítunk rá, hogy a dev EER kicsit romlik az augmentáció miatt, ez elfogadható.
+
+## 2026-10-18 – Run 3: gyengébb zajpadló
+
+**Mi derült ki Run 2-ből:** a dev EER 4,88%-ról 16,77%-ra romlott, az eval a könnyű támadásokon (A07, A11, A16, A18, A19) 2–7%-ról 22–44%-ra. A nehezeken (A12, A13, A15, A17) viszont javult. Az augmentáció iránya jó, az adag túl erős volt.
+
+**A zajpadló a bűnös, nem a maszkok.** A `mel_db` a fájl maximumához normalizál: 0 dB a csúcs, −80 dB a padló. A −50…−20 dB-es zaj mindent elfed, ami nála halkabb; −20 dB-nél ez a spektrogram nagy része. A modell soha nem látott tiszta képet, a dev és az eval viszont tiszta. Ez tanítás–teszt eltérés, nem regularizáció. A maszkok (2×8 mel-sor, 2×20 oszlop) a szokásos SpecAugment-értékek, azok maradnak.
+
+**Új érték: −70…−45 dB.** Csak a legcsendesebb tartományt érinti, ahol a vocoder-zaj és a háttérzaj van. A tiszta spektrogram nagy része érintetlen marad, de a "tiszta = valódi" szabály továbbra sem működik.
+
+**Egy változtatás.** Run 2 két dolgot változtatott egyszerre (augmentáció + cosine). A cosine ütemező a futás végén simán viselkedett (16,8–19,1% az utolsó 10 epochban), marad. Run 3 Run 2-höz képest csak a zaj szintjében tér el, így a hatás tisztán mérhető.
+
+**Várakozás:** dev EER 5–8%, eval a könnyű támadásokon Run 1 közelében, a nehezeken Run 2 közelében. Ha a dev EER megint 10% felett marad, a zajt teljesen kikapcsoljuk, és csak maszkokkal futunk.
