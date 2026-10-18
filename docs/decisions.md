@@ -140,3 +140,21 @@ Folyamatos napló arról, hogy mit miért csináltunk így. Új bejegyzés mindi
 **Egy változtatás.** Run 2 két dolgot változtatott egyszerre (augmentáció + cosine). A cosine ütemező a futás végén simán viselkedett (16,8–19,1% az utolsó 10 epochban), marad. Run 3 Run 2-höz képest csak a zaj szintjében tér el, így a hatás tisztán mérhető.
 
 **Várakozás:** dev EER 5–8%, eval a könnyű támadásokon Run 1 közelében, a nehezeken Run 2 közelében. Ha a dev EER megint 10% felett marad, a zajt teljesen kikapcsoljuk, és csak maszkokkal futunk.
+
+## 2026-10-18 – Run 4: LFCC bemenet mel helyett
+
+**Miért a bemenetet cseréljük:** három futás (Run 1–3), három tanítási recept, mindhárom 23–24% eval EER. A tanítási recepten már nem múlik. A mel-skála a magas frekvenciákat összetömöríti, az ASVspoof-irodalom szerint a vocoder-nyomok pont ott vannak. A hivatalos LFCC-GMM baseline (8,1% eval) ugyanezen az adaton lineáris skálával dolgozik.
+
+**LFCC, nem lineáris spektrogram.** A nyers lineáris spektrogram 513 sor lenne frame-enként, a cache 6-szor nagyobb, és a `/tmp` Kaggle-ön véges. Az LFCC 60 sor, kisebb cache, mint a mel, és van hozzá bevált recept.
+
+**A hivatalos baseline receptje:** 512-es FFT, 20 ms ablak, 10 ms lépés, 20 lineáris háromszög-szűrő 0–8 kHz között, log, DCT, 20 együttható, plusz delta és delta-delta. Kimenet 60 × 401 egy 4 másodperces fájlra. Nem találunk ki új paramétereket; ami a baseline-nak jó volt, az nekünk is kiindulásnak jó.
+
+**Ugyanitt, kapcsolóval, nem janus_02-ben.** A modell, a tanító script és a kiértékelés változatlan. A `config.yaml` `audio.feature` kulcsa választ: `mel` vagy `lfcc`. A régi checkpointok configjában nincs `feature` kulcs, azt mel-ként értelmezzük, így Run 1–3 továbbra is kiértékelhető.
+
+**A modell nem változik.** Az `AdaptiveAvgPool2d` miatt a CNN bármilyen F × T bemenetet elfogad; a 80 × 251 mel helyett 60 × 401 LFCC-t kap. Ugyanaz a 23 585 paraméter. Így a különbség csak a bemenetnek tudható be.
+
+**A cache feature-enként külön mappába megy** (`cache/mel/...`, `cache/lfcc/...`). Ha ugyanabban a kernelben két feature-rel futnánk, nem keverednének.
+
+**Zajpadló-augmentáció LFCC-nél kimarad.** A zajpadló dB-s teljesítmény-spektrogramon van értelmezve; a cepstrum nem az. A maszkolás (2 sor-sáv, 2 időszakasz) marad, mert az bármilyen képen működik. Run 3 tanulsága szerint a zaj amúgy is több kárt okozott, mint hasznot (A11).
+
+**Várakozás:** eval EER 20% alá. Ha nem, a következő a modell mérete, nem a bemenet.

@@ -1,18 +1,28 @@
 audio:
   sr: 16000
   max_sec: 4.0
+  trim_db: 30
+  feature: lfcc       # mel | lfcc  (Run 1-3: mel, Run 4-tol: lfcc)
+  # mel beallitasok (feature: mel)
   n_fft: 1024
   hop: 256
   n_mels: 80
-  trim_db: 30
+  # lfcc beallitasok (feature: lfcc) - ASVspoof 2019 hivatalos LFCC-baseline recept
+  lfcc:
+    n_fft: 512
+    win: 320          # 20 ms
+    hop: 160          # 10 ms
+    n_filters: 20     # linearis haromszog-szurok 0-8 kHz kozott
+    n_lfcc: 20        # DCT utan megtartott egyutthatok
+    deltas: true      # + delta + delta-delta -> 60 sor
 
-augment:            # csak tanitaskor, a cache-elt mel-spektrogramon (train.py --augment)
-  noise_db_min: -70 # zajpadlo szintje dB-ben, a fajl maximumahoz kepest (0 dB = max, -80 = padlo)
+augment:            # csak tanitaskor, a cache-elt feature-on (train.py --augment)
+  noise_db_min: -70 # zajpadlo dB-ben, a fajl maximumahoz kepest; csak mel eseten, LFCC-nel kimarad
   noise_db_max: -45 # Run 2-ben -50..-20 volt: tul eros, a spektrogram nagy reszet elfedte
-  n_freq_masks: 2   # ennyi veletlen frekvenciasavot nullazunk
-  freq_mask_max: 8  # max savszelesseg mel-sorban
+  n_freq_masks: 2   # ennyi veletlen frekvenciasavot (LFCC-nel: egyutthato-sort) nullazunk
+  freq_mask_max: 8  # max savszelesseg sorban
   n_time_masks: 2   # ennyi veletlen idoszakaszt nullazunk
-  time_mask_max: 20 # max hossz oszlopban (20 oszlop = 0.32 s)
+  time_mask_max: 20 # max hossz oszlopban (mel: 0.32 s, lfcc: 0.2 s)
 
 data:
   root: data/LA

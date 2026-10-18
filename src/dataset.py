@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
-from features import load_audio, mel_db
+from features import extract, load_audio
 
 PROTOCOL = {
     "train": "ASVspoof2019.LA.cm.train.trn.txt",
@@ -25,10 +25,12 @@ def load_protocol(root, split):
 
 
 class MelDataset(Dataset):
-    """load_protocol DataFrame -> (mel (1, n_mels, T) float32, y float32).
+    """load_protocol DataFrame -> (feature (1, F, T) float32, y float32).
 
-    cache_dir megadasakor a mel-spektrogramot fajlonkent .npy-ba menti,
-    igy a masodik epochtol nem szamol ujra.
+    F = n_mels (mel) vagy 3*n_lfcc (lfcc), az audio config `feature` kulcsa szerint.
+    cache_dir megadasakor a feature-t fajlonkent .npy-ba menti, a feature neve szerinti
+    almappaba (cache/mel/..., cache/lfcc/...), igy a masodik epochtol nem szamol ujra,
+    es a ket feature cache-e nem keveredik.
     """
 
     def __init__(self, df, audio_cfg, cache_dir=None, augment=None):
@@ -36,8 +38,9 @@ class MelDataset(Dataset):
         self.files = df["file"].tolist()
         self.y = df["y"].to_numpy(dtype=np.float32)
         self.cfg = audio_cfg
+        self.feature = audio_cfg.get("feature", "mel")
         self.augment = augment
-        self.cache_dir = Path(cache_dir) if cache_dir else None
+        self.cache_dir = Path(cache_dir) / self.feature if cache_dir else None
         if self.cache_dir:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -50,7 +53,7 @@ class MelDataset(Dataset):
             return np.load(cache)
         c = self.cfg
         y = load_audio(self.paths[i], sr=c["sr"], max_sec=c["max_sec"], trim_db=c["trim_db"])
-        m = mel_db(y, sr=c["sr"], n_fft=c["n_fft"], hop=c["hop"], n_mels=c["n_mels"])
+        m = extract(y, c)
         if cache:
             np.save(cache, m)
         return m
@@ -60,9 +63,11 @@ class MelDataset(Dataset):
         hogy a DataLoader worker-ek kulonbozo sorozatot kapjanak."""
         a = self.augment
         m = m.copy()
-        # zajpadlo: teljesitmenyben osszeadjuk egy veletlen szintu egyenletes zajjal
-        noise_db = a["noise_db_min"] + torch.rand(()).item() * (a["noise_db_max"] - a["noise_db_min"])
-        m = 10 * np.log10(10 ** (m / 10) + 10 ** (noise_db / 10)).astype(np.float32)
+        if self.feature == "mel":
+            # zajpadlo: teljesitmenyben osszeadjuk egy veletlen szintu egyenletes zajjal.
+            # csak dB-s spektrogramon ertelmes; LFCC (cepstrum) eseten kimarad, ott csak maszkolas van.
+            noise_db = a["noise_db_min"] + torch.rand(()).item() * (a["noise_db_max"] - a["noise_db_min"])
+            m = 10 * np.log10(10 ** (m / 10) + 10 ** (noise_db / 10)).astype(np.float32)
         fill = m.mean()
         n_mels, T = m.shape
         for _ in range(a["n_freq_masks"]):

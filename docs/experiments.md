@@ -135,3 +135,57 @@ Az összesített eval EER nem került a naplóba; a per-attack sorokból látszi
 - **Két dolgot változtattunk egyszerre** (augmentáció + ütemező), ezért a két hatás nem válik szét tisztán. Az ütemezőt megtartjuk, az augmentációt gyengítjük; így Run 3 egy változtatás lesz Run 2-höz képest.
 
 **Következő lépés (Run 3):** a zajpadló −70…−45 dB-re (csak a legcsendesebb részeket érinti), a maszkok maradnak. Cosine, 30 epoch marad. Várakozás: dev EER visszamegy 5–8% közé, az eval a könnyű támadásokon Run 1 közelébe, a nehezeken Run 2 közelébe.
+
+## Run 3 – gyengébb zajpadló, 2026-10-18 (Kaggle, T4)
+
+**Kód:** commit `9c129ce`. **Változás Run 2-höz képest:** zajpadló −70…−45 dB (volt −50…−20). Maszkok, cosine, 30 epoch változatlan.
+
+**Hipotézis volt:** dev EER 5–8%, eval a könnyű támadásokon Run 1 közelében, a nehezeken Run 2 közelében.
+
+| Epoch | lr | Train loss | Dev EER |
+|---|---|---|---|
+| 20 | 3.0e-4 | 0.0584 | 8.71% |
+| 21 | 2.5e-4 | 0.0566 | 8.44% |
+| 24 | 1.3e-4 | 0.0534 | 7.62% |
+| 25 | 9.6e-5 | 0.0523 | **6.99%** |
+| 28 | 2.5e-5 | 0.0505 | 7.10% |
+| 30 | 2.7e-6 | 0.0500 | 7.06% |
+
+**Legjobb dev EER: 6.99% (25. epoch).** Run 1: 4.88%, Run 2: 16.77%. Az utolsó 10 epoch 7–9% között, nem ugrál; a cosine vége simán konvergál.
+
+**Eval összesítve: 23.52%** (Run 1: 24.30%). Gyakorlatilag ugyanaz.
+
+| Eval támadás | Run 1 | Run 2 | Run 3 | |
+|---|---|---|---|---|
+| A07 | 4.20% | 26.89% | 19.95% | rosszabb, mint Run 1 |
+| A08 | 1.56% | 12.60% | 4.10% | visszajött |
+| A09 | 2.33% | 7.99% | 3.75% | visszajött |
+| A10 (Tacotron2 + WaveRNN) | 35.91% | 44.75% | 42.49% | rossz maradt |
+| A11 (Griffin-Lim TTS) | 3.82% | 44.42% | 43.97% | sokkal rosszabb, mint Run 1 |
+| A12 (Tacotron + WaveNet) | 56.31% | 39.30% | 50.35% | véletlen körül |
+| A13 (VC + TTS, hullámforma-szűrés) | 57.05% | 12.35% | 22.09% | sokkal jobb, mint Run 1 |
+| A14 | 13.90% | 31.02% | 9.37% | jobb |
+| A15 (VC, WaveNet) | 34.99% | 26.51% | 32.29% | rossz maradt |
+| A16 | 6.73% | 31.01% | 11.87% | kicsit rosszabb |
+| A17 (VAE VC, hullámforma-szűrés) | 35.01% | 22.08% | 20.37% | jobb |
+| A18 | 4.60% | 25.67% | 7.27% | nagyjából visszajött |
+| A19 | 4.54% | 22.94% | 6.69% | nagyjából visszajött |
+
+**Idő:** tanítás 30 epoch 36 perc (cache-építéssel), eval 37 perc. Összesen 74 perc.
+
+**Tanulságok:**
+- **A dev-hipotézis bejött** (6.99%), az eval-hipotézis csak félig. A nehéz támadások közül A13 és A17 jobb, mint Run 1-ben, de A11 ugyanúgy 44%, mint Run 2-ben, és A07 is 20%.
+- **Az összesített eval nem mozdult** (24.3 → 23.5%). Az augmentáció átrendezte, melyik támadás könnyű és melyik nehéz, de nem csökkentette a hibát. Amit nyertünk A13-on és A17-en, azt elvesztettük A11-en és A07-en.
+- **A11 (Griffin-Lim) tanulsága:** ez a támadás a halk zajpadlójáról ismerhető fel. Már a gyenge zaj-augmentáció is pont ezt a nyomot törli, ezért mind Run 2-ben, mind Run 3-ban 44%. A zajpadló-augmentáció tehát nem semleges: bizonyos támadások nyomát szisztematikusan eltünteti.
+- **A dev és az eval között továbbra is háromszoros a különbség** (7% vs 23,5%). Ez a fő probléma, és a spektrogram-augmentáció önmagában nem oldja meg. A 23 ezer paraméteres modell 80 mel-sávon nem lát elég részletet ahhoz, hogy általános spoof-jellemzőket tanuljon; a mel-skála pont a magas frekvenciákat tömöríti össze, ahol a vocoder-nyomok vannak.
+- **Három futás, három rendszer, azonos ~24%.** Ha a következő változtatás sem visz 20% alá, nem a tanítási recepten kell tovább csavarni, hanem a bemeneten vagy a modell méretén.
+
+**Következő lépés (Run 4):** a bemenetet változtatjuk, nem a tanítást. Mel helyett lineáris frekvenciaskálájú spektrogram (vagy LFCC), hogy a magas frekvenciás vocoder-nyomok ne tömörödjenek össze. Az ASVspoof 2019 irodalomban az LFCC-alapú rendszerek következetesen jobbak a mel-alapúaknál ezen a halmazon. Augmentáció: a Run 3 beállítás marad.
+
+## Run 4 – LFCC bemenet, 2026-10-18 (tervezett)
+
+**Változás Run 3-hoz képest:** `config.yaml` `audio.feature: lfcc` (20 LFCC + Δ + ΔΔ = 60 sor, 10 ms lépés, 401 oszlop). Augmentáció: csak maszkolás (a zajpadló LFCC-nél kimarad). Modell, cosine, 30 epoch, batch, lr változatlan. Commit: (push után).
+
+**Hipotézis:** eval EER 20% alá. A11 visszamegy 10% alá (a zaj-augmentáció megszűnt, és a lineáris skála jobban mutatja a Griffin-Lim nyomait). A dev EER 5% körül.
+
+**Eredmény:** (futás után)

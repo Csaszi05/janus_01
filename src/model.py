@@ -11,7 +11,8 @@ def block(c_in, c_out):
 
 
 class JanusCNN(nn.Module):
-    """Bemenet: (B, 1, 80, T) mel-spektrogram dB-ben. Kimenet: (B,) logit, pozitiv = spoof."""
+    """Bemenet: (B, 1, F, T) feature-kep (mel dB: F=80, LFCC: F=60). Az AdaptiveAvgPool miatt
+    F es T tetszoleges. Kimenet: (B,) logit, pozitiv = spoof."""
 
     def __init__(self, dropout=0.3):
         super().__init__()
