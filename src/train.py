@@ -1,4 +1,5 @@
 import argparse
+import random
 from pathlib import Path
 
 import numpy as np
@@ -31,6 +32,17 @@ def evaluate(model, loader, device):
     return compute_eer(torch.cat(scores).numpy(), torch.cat(labels).numpy())
 
 
+def set_seed(seed):
+    """Rogziti a veletlen kezdoerteket: sulyinicializalas, keveres, augmentacio.
+    A DataLoader worker-ek seedje a torch RNG-bol szarmazik, igy azok is rogzulnek."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--data_root", required=True)
@@ -44,11 +56,21 @@ def main():
     p.add_argument("--log_every", type=int, default=100, help="koztes loss kiirasa ennyi batch-enkent")
     p.add_argument("--augment", action="store_true", help="SpecAugment a train halmazon (config.yaml: augment)")
     p.add_argument("--sched", default="none", choices=["none", "cosine"], help="lr-utemezo")
+    p.add_argument("--seed", type=int, default=None, help="veletlen kezdoertek; alapertelmezes: nincs rogzitve")
     args = p.parse_args()
 
+    if args.seed is not None:
+        set_seed(args.seed)
     cfg = yaml.safe_load(open(args.config))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    log_file = open(out / "train_log.txt", "w")
+
+    def log(msg):
+        print(msg, flush=True)
+        log_file.write(msg + "\n")
+        log_file.flush()
+
     cache = Path(args.cache_dir) if args.cache_dir else out / "cache"
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -68,8 +90,9 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs) if args.sched == "cosine" else None
 
-    print(f"device={device} train={len(train_ds)} dev={len(dev_ds)} pos_weight={pos_weight.item():.3f} "
-          f"augment={args.augment} sched={args.sched}")
+    log(f"seed={args.seed} device={device} train={len(train_ds)} dev={len(dev_ds)} pos_weight={pos_weight.item():.3f} "
+        f"augment={args.augment} sched={args.sched} feature={cfg['audio'].get('feature', 'mel')} "
+        f"epochs={args.epochs} batch={args.batch} lr={args.lr}")
     best_eer = float("inf")
     for epoch in range(1, args.epochs + 1):
         model.train()
@@ -83,7 +106,7 @@ def main():
             total += loss.item() * len(y)
             n += len(y)
             if args.log_every and i % args.log_every == 0:
-                print(f"  epoch {epoch} batch {i}/{len(train_dl)} loss {total / n:.4f}", flush=True)
+                log(f"  epoch {epoch} batch {i}/{len(train_dl)} loss {total / n:.4f}")
         train_loss = total / n
         lr = optimizer.param_groups[0]["lr"]
         if scheduler:
@@ -93,12 +116,14 @@ def main():
         if dev_eer < best_eer:
             best_eer = dev_eer
             torch.save(
-                {"model": model.state_dict(), "optimizer": optimizer.state_dict(), "epoch": epoch, "config": cfg},
+                {"model": model.state_dict(), "optimizer": optimizer.state_dict(), "epoch": epoch, "config": cfg,
+                 "seed": args.seed},
                 out / "janus_best.pt",
             )
             flag = " *"
-        print(f"epoch {epoch:3d}  lr {lr:.2e}  train_loss {train_loss:.4f}  dev_eer {dev_eer * 100:.2f}%{flag}")
-    print(f"best dev_eer {best_eer * 100:.2f}%")
+        log(f"epoch {epoch:3d}  lr {lr:.2e}  train_loss {train_loss:.4f}  dev_eer {dev_eer * 100:.2f}%{flag}")
+    log(f"best dev_eer {best_eer * 100:.2f}%")
+    log_file.close()
 
 
 if __name__ == "__main__":

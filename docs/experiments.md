@@ -235,3 +235,14 @@ Az összesített eval EER nem került a naplóba; a per-attack sorokból látszi
 - **Három döntés megerősítve:** LFCC marad (jobb eval, gyorsabb), cosine marad (sima görbe), maszkolás marad.
 
 **Következő lépés (Run 5, Janus 0.3):** nagyobb modell, ResNet-stílusú reziduális blokkokkal. Minden más változatlan. Külön repóban folytatódik: `voisec_models/janus_03`. Várakozás: dev EER 5% alá, eval 18% alá.
+
+## Seedes futások: Janus 0.1 és 0.2 × seed 0/1/2 (tervezett, határnap: 2026-11-05)
+
+A teljes terv (a 0.3-mal együtt) a `janus_03/docs/experiments.md`-ben van. Ebben a repóban:
+
+- **0.2:** `config.yaml` (LFCC), a `janus_03/notebooks/04_seeds_lfcc_kaggle.ipynb` futtatja a 0.3-mal együtt, közös LFCC-cache-sel. Kimenet: `out/v02_seed0…2`.
+- **0.1:** `config_mel.yaml`, a `notebooks/04_seeds_mel_kaggle.ipynb` futtatja. Kimenet: `out/v01_seed0…2`.
+
+Paraméterek betűre a Run 3 / Run 4 szerint: 30 epoch, batch 64, lr 1e-3, cosine, `--augment`, `--workers 2`. Csak a `--seed` új.
+
+**Eredmény:** (futások után)

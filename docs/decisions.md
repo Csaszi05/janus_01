@@ -170,3 +170,11 @@ Folyamatos napló arról, hogy mit miért csináltunk így. Új bejegyzés mindi
 ## 2026-10-19 – A Janus 0.3 külön repóba kerül
 
 A 0.3 a modellt cseréli, ezért a `voisec_models/janus_03` mappába és a `janus_03` GitHub-repóba került. A janus_01 lezárt: a 0.1 és a 0.2 végleges kódját és eredményeit tartalmazza, változatlan viszonyítási alapként.
+
+## 2026-10-26 – Seed a tanításban; `config_mel.yaml`
+
+A janus_01 lezárt marad: a modell, a jellemzők és a tanítás nem változik. Egyetlen kódváltozás a `src/train.py --seed` kapcsoló és a `train_log.txt`, ugyanúgy, mint a janus_03-ban (indoklás: `janus_03/docs/decisions.md`, 2026-10-26). Seed nélkül a viselkedés a régi.
+
+**`config_mel.yaml` a 0.1-hez.** A `config.yaml` pontos másolata, egyetlen eltéréssel: `audio.feature: mel`. Így a 0.1 a main ág kódjával fut, külön ág nélkül.
+
+**Ellenőrizve, hogy a mel-ág betűre a Run 3 (`9c129ce`) állapota.** `git diff 9c129ce d80fb4e` mel esetén: a `features.mel_db` változatlan; a `dataset._augment` zajpadlója (−70…−45 dB) és a 2+2 maszk ugyanaz, csak `if self.feature == "mel":` alá került; a `train.py` és az `evaluate.py` nem változott; a `model.py`-ban csak a docstring. A `config_mel.yaml` és a Run 3 config értékei azonosak (sr, max_sec, trim_db, n_fft 1024, hop 256, n_mels 80, augment), pluszként csak a `feature: mel` kulcs (a kód alapértelmezése is mel volt) és a mel esetén nem használt `lfcc:` blokk. Az egyetlen működési különbség a cache helye: `cache/train/mel/…` a `cache/train/…` helyett; ez az eredményt nem befolyásolja.
