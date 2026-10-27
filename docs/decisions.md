@@ -158,3 +158,15 @@ Folyamatos napló arról, hogy mit miért csináltunk így. Új bejegyzés mindi
 **Zajpadló-augmentáció LFCC-nél kimarad.** A zajpadló dB-s teljesítmény-spektrogramon van értelmezve; a cepstrum nem az. A maszkolás (2 sor-sáv, 2 időszakasz) marad, mert az bármilyen képen működik. Run 3 tanulsága szerint a zaj amúgy is több kárt okozott, mint hasznot (A11).
 
 **Várakozás:** eval EER 20% alá. Ha nem, a következő a modell mérete, nem a bemenet.
+
+## 2026-10-18 – Ütemterv: szakdolgozat és VoiSec szétválasztása
+
+**Verziók.** Janus 0.1 = kis CNN mel bemeneten (Run 1–3). Janus 0.2 = ugyanaz a CNN LFCC bemeneten (Run 4). Janus 0.3 = ResNet-stílusú CNN LFCC-n. Mindegyik lépcső pontosan egy változót cserél, és a teljes eval halmazon mérünk. Ez a három a szakdolgozat (novemberi határidő).
+
+**0.3 = ResNet-stílus, nem szélesebb kis CNN, nem LCNN, nem RawNet2.** A Run 4 után a szélesebb csatornák lettek volna a legkisebb lépés, de a reziduális blokk a mostani blokkokból egy átugró összeköttetéssel építhető, a szakirodalomban ez a standard erős spektrogram-alapú modell, és a dolgozat blokk-magyarázata természetesen bővül vele. Az LCNN csak egy új aktivációt hozna, a RawNet2 túl sok új fogalmat; az utóbbi az 1.x-be kerül.
+
+**1.x a határidő után.** Több adathalmaz (ASVspoof 2019 LA, 2021 DF, ASVspoof 5, MLAAD, In-the-Wild, WaveFake), leave-one-dataset-out kereszt-kiértékelés, 6×6-os táblázat. Kaggle-ön nem fér el; saját szerver tárol, bérelt GPU tanít. A dolgozatba a 8. fejezetbe egy bekezdés.
+
+## 2026-10-19 – A Janus 0.3 külön repóba kerül
+
+A 0.3 a modellt cseréli, ezért a `voisec_models/janus_03` mappába és a `janus_03` GitHub-repóba került. A janus_01 lezárt: a 0.1 és a 0.2 végleges kódját és eredményeit tartalmazza, változatlan viszonyítási alapként.

@@ -182,10 +182,56 @@ Az összesített eval EER nem került a naplóba; a per-attack sorokból látszi
 
 **Következő lépés (Run 4):** a bemenetet változtatjuk, nem a tanítást. Mel helyett lineáris frekvenciaskálájú spektrogram (vagy LFCC), hogy a magas frekvenciás vocoder-nyomok ne tömörödjenek össze. Az ASVspoof 2019 irodalomban az LFCC-alapú rendszerek következetesen jobbak a mel-alapúaknál ezen a halmazon. Augmentáció: a Run 3 beállítás marad.
 
-## Run 4 – LFCC bemenet, 2026-10-18 (tervezett)
+## Run 4 – LFCC bemenet, 2026-10-18 (Kaggle, T4)
 
-**Változás Run 3-hoz képest:** `config.yaml` `audio.feature: lfcc` (20 LFCC + Δ + ΔΔ = 60 sor, 10 ms lépés, 401 oszlop). Augmentáció: csak maszkolás (a zajpadló LFCC-nél kimarad). Modell, cosine, 30 epoch, batch, lr változatlan. Commit: (push után).
+**Kód:** commit `d80fb4e`. **Változás Run 3-hoz képest:** `audio.feature: lfcc` (20 LFCC + Δ + ΔΔ = 60 sor, 10 ms lépés, 401 oszlop). Augmentáció: csak maszkolás, a zajpadló LFCC-nél kimarad. Modell, cosine, 30 epoch, batch, lr változatlan.
 
-**Hipotézis:** eval EER 20% alá. A11 visszamegy 10% alá (a zaj-augmentáció megszűnt, és a lineáris skála jobban mutatja a Griffin-Lim nyomait). A dev EER 5% körül.
+**Hipotézis volt:** eval EER 20% alá, A11 vissza 10% alá, dev EER 5% körül.
 
-**Eredmény:** (futás után)
+| Epoch | lr | Train loss | Dev EER |
+|---|---|---|---|
+| 1 | 1.0e-3 | 0.1249 | 27.63% |
+| 3 | 9.9e-4 | 0.0957 | 19.63% |
+| 5 | 9.6e-4 | 0.0898 | 17.74% |
+| 8 | 8.7e-4 | 0.0800 | 14.57% |
+| 12 | 7.0e-4 | 0.0697 | 13.16% |
+| 17 | 4.5e-4 | 0.0622 | 11.96% |
+| 20 | 3.0e-4 | 0.0583 | 11.34% |
+| 23 | 1.7e-4 | 0.0550 | 11.08% |
+| 25 | 9.6e-5 | 0.0536 | 11.07% |
+| 26 | 6.7e-5 | 0.0530 | 10.95% |
+| 28 | 2.5e-5 | 0.0526 | 10.68% |
+| 29 | 1.1e-5 | 0.0516 | **10.47%** |
+| 30 | 2.7e-6 | 0.0521 | 10.56% |
+
+**Legjobb dev EER: 10.47% (29. epoch).** Run 3: 6.99%. Rosszabb, de a görbe sima, és a végén még csökken, miközben az lr már nulla közeli: a modell alultanított.
+
+**Eval összesítve: 21.16%.** Eddigi legjobb (Run 1: 24.30%, Run 3: 23.52%). A 20%-os célt épp nem érte el.
+
+| Eval támadás | Run 1 | Run 3 | Run 4 | |
+|---|---|---|---|---|
+| A07 | 4.20% | 19.95% | 28.21% | rosszabb |
+| A08 | 1.56% | 4.10% | 1.16% | eddigi legjobb |
+| A09 | 2.33% | 3.75% | 1.09% | eddigi legjobb |
+| A10 (Tacotron2 + WaveRNN) | 35.91% | 42.49% | 35.09% | rossz maradt |
+| A11 (Griffin-Lim TTS) | 3.82% | 43.97% | 7.23% | visszajött |
+| A12 (Tacotron + WaveNet) | 56.31% | 50.35% | 41.67% | jobb, de még rossz |
+| A13 (VC + TTS, hullámforma-szűrés) | 57.05% | 22.09% | 35.41% | a kettő között |
+| A14 | 13.90% | 9.37% | 4.01% | eddigi legjobb |
+| A15 (VC, WaveNet) | 34.99% | 32.29% | 8.99% | sokkal jobb |
+| A16 (konkatenatív TTS) | 6.73% | 11.87% | 25.90% | sokkal rosszabb |
+| A17 (VAE VC, hullámforma-szűrés) | 35.01% | 20.37% | 14.29% | eddigi legjobb |
+| A18 (vocoder VC) | 4.60% | 7.27% | 25.63% | sokkal rosszabb |
+| A19 | 4.54% | 6.69% | 10.46% | rosszabb |
+
+**Idő:** 1. epoch 14 perc (cache-építés), utána 19 s/epoch; tanítás összesen 23 perc. Eval 19 perc. Összesen 42 perc, Run 3-ban 74 volt. Az LFCC olcsóbb számolni, mint a mel.
+
+**Tanulságok:**
+- **A dev–eval szakadék szűkült.** Run 3: 7% vs 23,5% (3,4×). Run 4: 10,5% vs 21,2% (2×). A dev rosszabb, az eval jobb: a modell kevésbé a train hat rendszerére tanul rá, és jobban visz át ismeretlen támadásokra. Ez volt a cél.
+- **A WaveNet-alapú támadások javultak legtöbbet** (A15 32 → 9%, A12 50 → 42%, A17 20 → 14%). A lineáris skála tényleg jobban mutatja a neurális vocoder magas frekvenciás nyomait.
+- **A11 visszajött** (44 → 7%), ahogy vártuk: a zaj-augmentáció megszűnt.
+- **A16 és A18 romlott** (7 → 26%, 5 → 26%). A16 konkatenatív: valódi hullámforma-darabok, a nyom az illesztéseknél, időben. A18 vocoder VC. Ezeket a mel-kép jobban mutatta. Nincs ingyen ebéd: a bemenet cseréje más támadásokat tesz láthatóvá, és másokat rejt el.
+- **Alultanítás.** A dev EER a 30. epochnál még csökken, a train loss 0.052-nél áll. A 23 ezer paraméteres háló kevés a 60 soros cepstrális képhez. Ez egyezik a döntésnapló előre rögzített szabályával: ha az LFCC nem visz 20% alá, a modell mérete jön.
+- **Három döntés megerősítve:** LFCC marad (jobb eval, gyorsabb), cosine marad (sima görbe), maszkolás marad.
+
+**Következő lépés (Run 5, Janus 0.3):** nagyobb modell, ResNet-stílusú reziduális blokkokkal. Minden más változatlan. Külön repóban folytatódik: `voisec_models/janus_03`. Várakozás: dev EER 5% alá, eval 18% alá.
