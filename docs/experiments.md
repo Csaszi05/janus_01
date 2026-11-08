@@ -236,7 +236,7 @@ Az összesített eval EER nem került a naplóba; a per-attack sorokból látszi
 
 **Következő lépés (Run 5, Janus 0.3):** nagyobb modell, ResNet-stílusú reziduális blokkokkal. Minden más változatlan. Külön repóban folytatódik: `voisec_models/janus_03`. Várakozás: dev EER 5% alá, eval 18% alá.
 
-## Seedes futások: Janus 0.1 és 0.2 × seed 0/1/2 (tervezett, határnap: 2026-11-05)
+## Seedes futások: Janus 0.1 és 0.2 × seed 0/1/2 (Kaggle, lefutott)
 
 A teljes terv (a 0.3-mal együtt) a `janus_03/docs/experiments.md`-ben van. Ebben a repóban:
 
@@ -245,4 +245,17 @@ A teljes terv (a 0.3-mal együtt) a `janus_03/docs/experiments.md`-ben van. Ebbe
 
 Paraméterek betűre a Run 3 / Run 4 szerint: 30 epoch, batch 64, lr 1e-3, cosine, `--augment`, `--workers 2`. Csak a `--seed` új.
 
-**Eredmény:** (futások után)
+**Eredmény** (átlag ± mintaszórás, n = 3; a teljes összesítés a 0.3-mal, támadásonként és futásonként a `janus_03/docs/experiments.md`-ben van):
+
+| Verzió | Dev EER (legjobb epoch) | Eval EER | Eval min–max | Ismert (A16, A19) | Ismeretlen |
+|---|---|---|---|---|---|
+| 0.1 (mel) | 8.31 ± 1.04 | **24.32 ± 3.48** | 21.23–28.09 | 11.58 ± 2.96 | 26.46 ± 3.70 |
+| 0.2 (LFCC) | 11.02 ± 0.91 | **21.01 ± 1.69** | 19.83–22.95 | 18.38 ± 1.37 | 21.50 ± 1.77 |
+
+**Tanulságok:**
+- **A 0.1 → 0.2 javulás összesítve nem igazolható.** A különbség 3.3 pont, de a tartományok átfednek, Welch p = 0.24. A Run 3 → Run 4 különbség (2.4 pont) a seedek közötti szórás nagyságrendje.
+- **A Run 4 tanulsága, a hibaprofil átrendeződése, seedekkel is megáll.**
+  - Javult: A11 40 → 6%, A15 31 → 7%, A14 13 → 3%, A17 23 → 11%.
+  - Romlott: A16 14 → 26%, A18 8 → 26%.
+- **A mel-modell instabil.** Az eval szórása ±3.5 pont, egyes támadásoknál ±9–10 pont (A07, A11). A Run 1 és a Run 3 támadásonkénti számai ezért egyetlen futásként nem megbízhatók.
+- **A dev EER nem jelzi előre az evalt.** A 0.1 dev-en jobb (8.3 vs 11.0%), eval-on rosszabb.
